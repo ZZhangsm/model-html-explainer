@@ -58,7 +58,7 @@ Use **model-html-explainer** when you want:
 <a id="toc-installation"></a>
 ## 安装 · Installation
 
-仓库地址：**https://github.com/<your>/model-html-explainer**
+仓库地址：**https://github.com/ZZhangsm/model-html-explainer**
 
 ### 方式一：把下面这段话发给 AI（推荐） / Option A: paste this prompt to an AI agent
 
@@ -72,13 +72,13 @@ Paste the block below to **Claude Code / Cursor / any AI agent with shell access
 【Claude Code】
 - 确保 ~/.claude/skills/ 目录存在（不存在就创建）
 - 若 ~/.claude/skills/model-html-explainer 已存在且是旧副本，先删掉该目录或改用 git pull 更新
-- 执行：git clone https://github.com/<your>/model-html-explainer.git ~/.claude/skills/model-html-explainer
+- 执行：git clone https://github.com/ZZhangsm/model-html-explainer.git ~/.claude/skills/model-html-explainer
 - 验证：ls ~/.claude/skills/model-html-explainer/ 应至少能看到 README.md、SKILL.md、references/
 
 【Codex】
 - 确保 ~/.codex/skills/ 目录存在（不存在就创建）
 - 若 ~/.codex/skills/model-html-explainer 已存在且是旧副本，先删掉该目录或改用 git pull 更新
-- 执行：git clone https://github.com/<your>/model-html-explainer.git ~/.codex/skills/model-html-explainer
+- 执行：git clone https://github.com/ZZhangsm/model-html-explainer.git ~/.codex/skills/model-html-explainer
 - 验证：ls ~/.codex/skills/model-html-explainer/ 应至少能看到 README.md、SKILL.md、references/
 
 只帮我装我实际用的那一套（Claude Code 或 Codex），装好后告诉我已完成；之后我说「根据仓库和论文生成模型解释 HTML」等需求应能触发这个 skill。
@@ -90,14 +90,14 @@ Paste the block below to **Claude Code / Cursor / any AI agent with shell access
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone https://github.com/<your>/model-html-explainer.git ~/.claude/skills/model-html-explainer
+git clone https://github.com/ZZhangsm/model-html-explainer.git ~/.claude/skills/model-html-explainer
 ```
 
 **Codex**
 
 ```bash
 mkdir -p ~/.codex/skills
-git clone https://github.com/<your>/model-html-explainer.git ~/.codex/skills/model-html-explainer
+git clone https://github.com/ZZhangsm/model-html-explainer.git ~/.codex/skills/model-html-explainer
 ```
 
 若目标目录已存在，请先删除旧目录或进入该目录用 `git pull` 更新，再执行 `git clone`。
@@ -151,7 +151,7 @@ The skill will:
 ## 效果展示 · Gallery
 
 <p>
-  <a title="OpenOneRec Explainer" href="https://github.com/<your>/model-html-explainer/blob/main/docs/gallery/openonerec-hero.png"><img src="docs/gallery/openonerec-hero.png" width="80%" alt="OpenOneRec Explainer — hero section" /></a>
+  <a title="OpenOneRec Explainer" href="https://github.com/ZZhangsm/model-html-explainer/blob/main/docs/gallery/openonerec-hero.png"><img src="docs/gallery/openonerec-hero.png" width="80%" alt="OpenOneRec Explainer — hero section" /></a>
 </p>
 
 <a id="toc-docs"></a>
