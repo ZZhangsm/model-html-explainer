@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OneRec → OpenOneRec — 生成式推荐架构与训练详解</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #79c0ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --pink: #f778ba;
+    --font: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+    --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --radius: 8px;
+    --maxw: 1200px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    line-height: 1.6;
+  }
+
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(13,17,23,0.94); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    gap: 4px; padding: 8px 16px; overflow-x: auto; flex-wrap: wrap;
+  }
+  nav a {
+    color: var(--text2); text-decoration: none; font-size: 0.78rem;
+    padding: 6px 14px; border-radius: 20px; white-space: nowrap;
+    transition: all .15s; font-family: var(--font);
+  }
+  nav a:hover, nav a.active { color: var(--text); background: var(--bg3); }
+  nav .logo { font-weight: 700; color: var(--accent); margin-right: 8px; font-size: 0.85rem; white-space: nowrap; }
+
+  .container { max-width: var(--maxw); margin: 60px auto 40px; padding: 0 24px; }
+  section { margin: 48px 0; }
+
+  h2 {
+    font-size: 1.5rem; font-weight: 600; margin-bottom: 20px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--accent);
+    display: inline-block;
+  }
+  h3 {
+    font-size: 1.1rem; font-weight: 600; margin: 24px 0 12px; color: var(--accent2);
+  }
+  h4 {
+    font-size: 1rem; font-weight: 600; margin: 16px 0 8px; color: var(--text);
+  }
+  p, li { color: var(--text2); margin-bottom: 8px; line-height: 1.7; }
+  code {
+    font-family: var(--font); font-size: 0.85rem; background: var(--bg3);
+    padding: 2px 6px; border-radius: 4px; color: var(--orange);
+  }
+  a { color: var(--accent); }
+
+  .card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px; margin: 16px 0;
+  }
+  .card-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px; margin: 16px 0;
+  }
+
+  .arch {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px; margin: 24px 0; font-family: var(--font);
+  }
+  .arch-row {
+    display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+  }
+  .arch-box {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 14px; font-size: 0.8rem;
+    text-align: center; transition: border-color .2s;
+  }
+  .arch-box:hover { border-color: var(--accent); }
+  .arch-box.highlight { border-color: var(--accent); background: #0a2a4a; }
+  .arch-box.green { border-color: var(--green); background: #0a2e1a; }
+  .arch-box.orange { border-color: var(--orange); background: #2e1a0a; }
+  .arch-box.purple { border-color: var(--purple); background: #1a0a2e; }
+  .arch-box.pink { border-color: var(--pink); background: #2e0a1a; }
+  .arch-box.small { padding: 4px 10px; font-size: 0.72rem; }
+  .arch-arrow { color: var(--text2); font-size: 1.2rem; }
+  .arch-label { font-size: 0.7rem; color: var(--text2); margin-top: -4px; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0;
+    font-size: 0.85rem;
+  }
+  th, td {
+    border: 1px solid var(--border); padding: 8px 12px; text-align: left;
+  }
+  th { background: var(--bg3); color: var(--text); font-weight: 600; }
+  td { color: var(--text2); }
+
+  pre {
+    background: #0a0e14; border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; overflow-x: auto; font-family: var(--font); font-size: 0.8rem;
+    line-height: 1.5; margin: 12px 0;
+  }
+  pre .kw { color: #ff7b72; }
+  pre .fn { color: #d2a8ff; }
+  pre .str { color: #a5d6ff; }
+  pre .cm { color: #484f58; }
+  pre .num { color: #79c0ff; }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--bg3);
+    padding: 12px 16px; margin: 12px 0; border-radius: 0 var(--radius) var(--radius) 0;
+    font-size: 0.9rem;
+  }
+  .note.warn { border-color: var(--orange); }
+  .note.info { border-color: var(--accent); }
+  .note.green { border-color: var(--green); }
+  .note.pink { border-color: var(--pink); }
+
+  .flow {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; margin: 20px 0; flex-wrap: wrap; font-family: var(--font);
+  }
+  .flow-item {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 14px; font-size: 0.8rem;
+    text-align: center;
+  }
+  .flow-arrow { color: var(--text2); font-size: 1.1rem; }
+
+  .dim-table td:first-child { font-family: var(--font); color: var(--orange); }
+  .dim-table td:nth-child(2) { font-family: var(--font); color: var(--accent2); }
+
+  @media (max-width: 768px) {
+    nav a { font-size: 0.7rem; padding: 4px 10px; }
+    .card-grid { grid-template-columns: 1fr; }
+    .arch-box { font-size: 0.7rem; padding: 6px 10px; }
+  }
+
+  .hero { text-align: center; padding: 40px 0 20px; }
+  .hero h1 {
+    font-size: 2.2rem; font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero .subtitle { color: var(--text2); font-size: 1.05rem; margin-top: 8px; }
+  .hero .meta { color: var(--text2); font-size: 0.9rem; margin-top: 4px; font-family: var(--font); }
+
+  .tag {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 0.7rem; font-family: var(--font); font-weight: 600;
+  }
+  .tag.blue { background: #0a2a4a; color: #79c0ff; }
+  .tag.green { background: #0a2e1a; color: #3fb950; }
+  .tag.orange { background: #2e1a0a; color: #d29922; }
+  .tag.purple { background: #1a0a2e; color: #bc8cff; }
+  .tag.pink { background: #2e0a1a; color: #f778ba; }
+  .tag.gray { background: #2d333b; color: #8b949e; }
+
+  .file-ref {
+    font-family: var(--font); font-size: 0.75rem; color: var(--text2);
+    background: var(--bg3); border-radius: 3px; padding: 1px 6px;
+    border: 1px solid var(--border);
+  }
+  .timeline {
+    position: relative; padding-left: 24px; margin: 16px 0;
+    border-left: 2px solid var(--border);
+  }
+  .timeline-item { margin-bottom: 16px; position: relative; }
+  .timeline-item::before {
+    content: ''; position: absolute; left: -30px; top: 6px;
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--bg);
+  }
+  .timeline-item.orange::before { background: var(--orange); }
+  .timeline-item.green::before { background: var(--green); }
+  .timeline-item.purple::before { background: var(--purple); }
+  .timeline-item.pink::before { background: var(--pink); }
+  .timeline-item .date { font-size: 0.75rem; color: var(--text2); font-family: var(--font); }
+  .timeline-item .title { font-weight: 600; color: var(--text); }
+  .paper-ref {
+    display: inline-block; font-size: 0.75rem; font-family: var(--font);
+    padding: 2px 8px; border-radius: 4px; background: var(--bg3);
+    border: 1px solid var(--border); color: var(--purple);
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">OneRec · OpenOneRec</span>
+  <a href="#timeline">项目脉络</a>
+  <a href="#overview">系统概述</a>
+  <a href="#onerec-arch">OneRec 架构</a>
+  <a href="#onerec-session">Session生成</a>
+  <a href="#onerec-ipa">IPA偏好对齐</a>
+  <a href="#itemic">Itemic Token</a>
+  <a href="#openonerec-arch">OpenOneRec</a>
+  <a href="#stage1">Stage 1</a>
+  <a href="#stage2">Stage 2</a>
+  <a href="#sft">SFT</a>
+  <a href="#rl">RL</a>
+  <a href="#eval">评估</a>
+  <a href="#code">代码地图</a>
+</nav>
+
+<div class="container">
+
+<!-- ============================================================ -->
+<div class="hero">
+  <h1>OneRec → OpenOneRec</h1>
+  <p class="subtitle">从工业级统一生成式推荐系统到开源基础模型</p>
+  <p class="meta">
+    Kuaishou Inc. &middot;
+    <a href="https://arxiv.org/abs/2502.18965">arXiv:2502.18965 (OneRec, 2025.02)</a> &middot;
+    <a href="https://arxiv.org/abs/2512.24762">arXiv:2512.24762 (OpenOneRec TR, 2025.12)</a> &middot;
+    <a href="https://github.com/Kuaishou-OneRec/OpenOneRec">GitHub</a>
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<section id="timeline">
+  <h2>0. 项目脉络：OneRec → OpenOneRec</h2>
+
+  <p>本项目包含两代工作，第一篇侧重工业落地，第二篇侧重开源生态与技术报告：</p>
+
+  <div class="timeline">
+    <div class="timeline-item orange">
+      <div class="date">2025.02</div>
+      <div class="title"><span class="paper-ref">arXiv:2502.18965</span> OneRec: Unifying Retrieve and Rank with Generative Recommender and Preference Alignment</div>
+      <p>工业级生成式推荐系统，首个在快手主场景上线并显著超越多级级联排序管线的端到端生成模型。核心贡献：<strong>Encoder-Decoder + 稀疏 MoE</strong> 架构、<strong>Session-wise 列表生成</strong>、<strong>迭代偏好对齐（IPA）</strong> + 基于 Reward Model 的 DPO。在线 A/B 测试提升观看时长 1.6%。</p>
+      <p><strong>仓库代码：</strong>该论文对应的原始生产系统代码未开源。</p>
+    </div>
+    <div class="timeline-item green">
+      <div class="date">2025.12 / 2026.02 (v2)</div>
+      <div class="title"><span class="paper-ref">arXiv:2512.24762</span> OpenOneRec Technical Report</div>
+      <p>开源版本的基金会模型和评测基准。核心贡献：<strong>RecIF-Bench</strong>（100M 交互、8 任务四层能力体系）、<strong>OneRec-Foundation</strong>（基于 Qwen3 骨干、Itemic Token）、<strong>完整开源训练管线</strong>（数据处理 → Co-Pretraining → Post-Training）。</p>
+      <p><strong>仓库代码：</strong><code>github.com/Kuaishou-OneRec/OpenOneRec</code> 对应本篇。</p>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <strong>注意：</strong>OpenOneRec 代码库中的「OneRec」名称继承了前代的品牌，但技术方案完全不同：前者是工业级 Encoder-Decoder MoE，后者是基于 Qwen3 的开源 LLM 方案。本文档分别介绍两套方案后，<strong>以 OpenOneRec 代码库为主线</strong>进行逐步解析。
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="overview">
+  <h2>1. 系统概述</h2>
+
+  <p>OneRec / OpenOneRec 的核心思想是将推荐建模为一个<strong>统一的序列生成问题</strong>。传统推荐系统采用多级联范式（召回 → 粗排 → 精排），每级独立优化，上级准确度成为下级的瓶颈。OneRec 系列尝试用单一生成模型取代整个级联管线。</p>
+
+  <div class="arch">
+    <div class="arch-row">
+      <div class="arch-box pink small">用户历史行为</div>
+      <span class="arch-arrow">→</span>
+      <div class="arch-box highlight" style="min-width:180px">
+        <strong>统一生成模型</strong><br>
+        <span style="font-size:0.7rem">OneRec: Encoder-Decoder + MoE<br>OpenOneRec: Qwen3 Decoder-Only</span>
+      </div>
+      <span class="arch-arrow">→</span>
+      <div class="arch-box green small">推荐列表 / 预测 / 解释</div>
+    </div>
+    <div class="arch-label" style="margin-top:8px">代替 召回 → 粗排 → 精排 三级级联管线</div>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4>OneRec（2025.02 论文）<br><span style="font-weight:400;font-size:0.85rem;color:var(--text2)">生产系统</span></h4>
+      <ul>
+        <li><strong>架构：</strong>Encoder-Decoder + 稀疏 MoE</li>
+        <li><strong>生成方式：</strong>Session-wise 列表生成（5-10 视频/次）</li>
+        <li><strong>偏好对齐：</strong>Iterative Preference Alignment + DPO</li>
+        <li><strong>Item 表示：</strong>RQ-VAE 语义 ID（3 层码本）</li>
+        <li><strong>效果：</strong>在线 A/B 测试 +1.6% 观看时长</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>OpenOneRec（2025.12 技术报告）<br><span style="font-weight:400;font-size:0.85rem;color:var(--text2)">开源基础模型</span></h4>
+      <ul>
+        <li><strong>架构：</strong>Qwen3 Decoder-Only（1.7B / 8B）</li>
+        <li><strong>训练流程：</strong>Embedding Alignment → Co-Pretrain → SFT → Distillation → RL</li>
+        <li><strong>Item 表示：</strong>Itemic Token（层次化 VQ，3 层 × 8192 码本）</li>
+        <li><strong>评测：</strong>RecIF-Bench（8 任务）+ Amazon 跨域迁移</li>
+        <li><strong>数据：</strong>9600 万交互，16 万用户，开放数据集</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="onerec-arch">
+  <h2>2. OneRec 架构（论文 2502.18965）</h2>
+
+  <p>OneRec 采用 <strong>Encoder-Decoder</strong> 结构：编码器读取用户历史行为序列，解码器逐步生成用户可能感兴趣的 Session 列表。结合<strong>稀疏 MoE（Mixture-of-Experts）</strong>扩展模型容量，在不成比例增加计算量的前提下显著提升用户兴趣建模能力。</p>
+
+  <div class="arch">
+    <div class="arch-row">
+      <div class="arch-box" style="min-width:160px">
+        <strong>Encoder</strong><br>
+        <span style="font-size:0.7rem">用户历史序列编码</span>
+      </div>
+      <span class="arch-arrow">→</span>
+      <div class="arch-box highlight" style="min-width:180px">
+        <strong>Sparse MoE Transformer</strong><br>
+        <span style="font-size:0.7rem">扩展容量，控制 FLOPs</span>
+      </div>
+      <span class="arch-arrow">→</span>
+      <div class="arch-box" style="min-width:160px">
+        <strong>Decoder</strong><br>
+        <span style="font-size:0.7rem">自回归生成 Session 列表</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h4>特征工程</h4>
+    <p>用户侧特征：正反馈历史行为序列 ℋ<sub>u</sub> = {<b>v</b><sup>h</sup><sub>1</sub>, <b>v</b><sup>h</sup><sub>2</sub>, ..., <b>v</b><sup>h</sup><sub>n</sub>}，包含有效观看/点赞/关注/分享的视频。</p>
+    <p>每个视频 <b>v</b><sub>i</sub> 使用<strong>多模态嵌入</strong> <b>e</b><sub>i</sub> ∈ ℝ<sup>d</sup> 表示（Luo et al., 2024），这些嵌入与真实用户-物品行为分布对齐。</p>
+    <p>基于预训练的 RQ-VAE 模型将嵌入编码为<strong>语义 ID</strong>（Semantic IDs）：</p>
+    <pre>e → RQ-VAE(e) = [s<sub>1</sub>, s<sub>2</sub>, ..., s<sub>L</sub>]
+    <span class="cm"># L = 3 层残差量化</span></pre>
+    <p>最终用户历史序列表示为语义 ID 序列：</p>
+    <pre>ℋ<sub>u</sub> = {(s<sub>11</sub>, s<sub>12</sub>, s<sub>13</sub>), (s<sub>21</sub>, s<sub>22</sub>, s<sub>23</sub>), ..., (s<sub>n1</sub>, s<sub>n2</sub>, s<sub>n3</sub>)}</pre>
+    <span class="file-ref">论文 §3.1</span>
+  </div>
+
+  <h3>模型缩放</h3>
+  <p>论文发现推荐模型的缩放同样遵循 Scaling Law。通过稀疏 MoE 架构，模型参数可以扩展到数十亿级别，而计算量（FLOPs）保持与稠密模型相当。消融实验（§5.3.2）显示增加 MoE 专家数量可显著提升 Recall@K。</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="onerec-session">
+  <h2>3. OneRec: Session-Wise 列表生成</h2>
+
+  <p>传统推荐方法采用<strong>逐点（Point-wise）</strong>预测（只预测下一个视频）。OneRec 提出<strong>会话级（Session-wise）</strong>生成：一次性生成用户一次请求对应的推荐列表（5-10 个视频），捕捉列表内部的依赖关系和多样性。</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4>高质量 Session 筛选标准</h4>
+      <ol>
+        <li>用户实际观看的视频数 ≥ 5</li>
+        <li>用户在该 Session 上的总观看时长超过阈值</li>
+        <li>用户表现出互动行为（点赞、收藏、分享）</li>
+      </ol>
+      <p style="margin-top:8px">优化目标：𝒮 := ℳ(ℋ<sub>u</sub>)，其中 ℋ<sub>u</sub> 使用语义 ID 表示。</p>
+      <span class="file-ref">论文 §3.2</span>
+    </div>
+    <div class="card">
+      <h4>与传统方法对比</h4>
+      <table>
+        <tr><th>维度</th><th>逐点预测</th><th>Session-Wise</th></tr>
+        <tr><td>输出</td><td>1 个 item</td><td>5-10 个 item 列表</td></tr>
+        <tr><td>列表内依赖</td><td>需手工规则</td><td>模型自动学习</td></tr>
+        <tr><td>多样性控制</td><td>后处理采样</td><td>内生多样性</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="note">
+    优势在于：Session-wise 让模型自学习最优的列表结构（哪些视频组合在一起），而逐点生成需要后续通过手工规则（MMR、DPP 等）来保证列表的连贯性和多样性。
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="onerec-ipa">
+  <h2>4. OneRec: 迭代偏好对齐（IPA）</h2>
+
+  <p><span class="tag pink">DPO</span> <span class="tag purple">Reward Model</span> <span class="tag orange">Self-Hard Negatives</span></p>
+
+  <p>Session-wise 训练让模型学会"好的 Session 是什么样"，但能否进一步对齐用户偏好？OneRec 提出<strong>迭代偏好对齐（Iterative Preference Alignment, IPA）</strong>：</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4>挑战</h4>
+      <p>推荐系统与 NLP 的 DPO 关键区别：推荐系统中每个用户请求只有一次展示机会，无法同时获得正负样本。因此需要 <strong>Reward Model</strong> 来模拟用户偏好并构造偏好对。</p>
+      <span class="file-ref">论文 §3.3</span>
+    </div>
+    <div class="card">
+      <h4>Reward Model 训练</h4>
+      <p>以用户行为和 Session 特征为输入，预测用户对推荐 Session 的满意度。训练数据来自用户真实互动日志：</p>
+      <pre>R(u, 𝒮) → score
+<span class="cm"># 正样本：用户观看完成的 session
+# 负样本：用户跳过或未互动的 session</span></pre>
+      <span class="file-ref">论文 §3.3.1</span>
+    </div>
+  </div>
+
+  <h3>IPA 算法流程</h3>
+  <pre><span class="cm">/* 论文 Algorithm 1: Iterative Preference Alignment */</span>
+<span class="kw">for</span> epoch = t <span class="kw">to</span> T:
+    <span class="kw">for</span> sample = 1 <span class="kw">to</span> N_sample:
+        <span class="kw">if</span> rand() &lt; r<sub>DPO</sub>:                   <span class="cm">// 以概率 r_DPO 进行 DPO</span>
+            <span class="cm">// 从 Beam Search 结果中选择 K 个候选</span>
+            candidates = beam_search(ℳ<sub>epoch</sub>, ℋ<sub>u</sub>, K)
+            <span class="cm">// 用 RM 对候选排序</span>
+            scores = RM(u, candidates)
+            best, worst = select_extremes(scores)
+            <span class="cm">// DPO 更新——选择作为 chosen，最差作为 rejected</span>
+            loss = DPO_loss(ℳ<sub>epoch</sub>, best, worst)
+        <span class="kw">else</span>:
+            <span class="cm">// 继续标准 session-wise 训练</span>
+            loss = CE_loss(ℳ<sub>epoch</sub>, session_data)</pre>
+
+  <div class="note warn">
+    <strong>Self-Hard Negatives：</strong>IPA 不从随机采样中构造负样本，而是从 Beam Search 结果中选出最差的——这些是模型"以为很好但实际上用户不喜欢"的结果（Hard Negatives），DPO 通过拉开 best 和 worst 的概率来提升生成质量。
+  </div>
+
+  <h3>在线 A/B 测试结果</h3>
+  <p>OneRec 部署于快手主场景，替代了三阶段级联管线（召回-粗排-精排）：</p>
+  <table>
+    <tr><th>指标</th><th>提升</th></tr>
+    <tr><td>观看时长</td><td>+1.6%（显著提升）</td></tr>
+  </table>
+  <span class="file-ref">论文 §5.5</span>
+</section>
+
+<!-- ============================================================ -->
+<section id="itemic">
+  <h2>5. OpenOneRec: Itemic Token 嵌入</h2>
+
+  <p><span class="tag green">Qwen3-Embedding</span> <span class="tag purple">Residual K-Means</span> <span class="tag orange">词表扩展</span></p>
+
+  <p>OpenOneRec 将每个物品编码为 LLM 词表中的一组可学习 token ID——<strong>Itemic Token</strong>。这是与 OneRec 论文中 RQ-VAE 类似的思路，但集成到了 Qwen3 的词表中。</p>
+
+  <div class="arch">
+    <div class="arch-row">
+      <div class="arch-box pink" style="min-width:120px">
+        物品多模态嵌入<br><span style="font-size:0.7rem">Qwen3-8B-Embedding</span>
+      </div>
+      <span class="arch-arrow">→</span>
+      <div class="arch-box green" style="min-width:140px">
+        残差 K-Means<br><span style="font-size:0.7rem">3 层 × 8192 码本</span>
+      </div>
+      <span class="arch-arrow">→</span>
+      <div class="arch-box highlight" style="min-width:180px">
+        <code>&lt;s_a_340&gt;</code> <code>&lt;s_b_6566&gt;</code> <code>&lt;s_c_5603&gt;</code>
+      </div>
+      <span class="arch-arrow">→</span>
+      <div class="arch-box small">
+        拼入输入序列<br><code>&lt;|sid_begin|&gt;...(tokens)...&lt;|sid_end|&gt;</code>
+      </div>
+    </div>
+  </div>
+
+  <h3>残差 K-Means 算法</h3>
+  <div class="card-grid">
+    <div class="card">
+      <h4>编码</h4>
+      <pre><span class="kw">def</span> <span class="fn">encode</span>(self, x):
+    <span class="kw">for</span> l <span class="kw">in</span> <span class="fn">range</span>(n_layers):
+        dist = torch.addmm(x_norm_sq + c_norm_sq,
+                x, self.centroids[l].T, alpha=-<span class="num">2.0</span>)
+        code = dist.argmin(dim=-<span class="num">1</span>)
+        x = x - self.centroids[l][code]  <span class="cm"># 残差</span>
+        out.append(code)
+    <span class="kw">return</span> torch.stack(out, dim=<span class="num">1</span>)      <span class="cm"># [batch, L]</span></pre>
+      <span class="file-ref">tokenizer/res_kmeans.py:27</span>
+    </div>
+    <div class="card">
+      <h4>解码</h4>
+      <pre><span class="kw">def</span> <span class="fn">decode</span>(self, code):
+    out = torch.zeros((code.shape[<span class="num">0</span>], self.dim))
+    <span class="kw">for</span> l <span class="kw">in</span> <span class="fn">range</span>(n_layers):
+        c = code[:, l]
+        out += self.centroids[l][c]    <span class="cm"># 求和重建</span>
+    <span class="kw">return</span> out                         <span class="cm"># [batch, dim]</span></pre>
+      <span class="file-ref">tokenizer/res_kmeans.py:40</span>
+    </div>
+  </div>
+
+  <h3>词表扩展</h3>
+  <p>在标准 Qwen3 tokenizer 基础上增加新 token。以 3 层、每层 8192 为例：</p>
+  <ul>
+    <li><code>&lt;s_a_0&gt;</code> ~ <code>&lt;s_a_8191&gt;</code> — 第 1 层码本索引</li>
+    <li><code>&lt;s_b_0&gt;</code> ~ <code>&lt;s_b_8191&gt;</code> — 第 2 层码本索引</li>
+    <li><code>&lt;s_c_0&gt;</code> ~ <code>&lt;s_c_8191&gt;</code> — 第 3 层码本索引</li>
+    <li><code>&lt;|sid_begin|&gt;</code> / <code>&lt;|sid_end|&gt;</code> — 特殊边界标记</li>
+  </ul>
+  <p>共 3 × 8192 + 2 = 24,578 个新 token，最终总词表对齐到 256 的倍数。</p>
+
+  <pre><span class="cm"># pretrain/scripts/expand_qwen3_vocab.sh</span>
+python3 tools/model_converter/expand_qwen3_vocab.py \
+    --hf_model_dir /path/to/Qwen3-0.6B \
+    --output_model_dir /path/to/Qwen3-0.6B_itemic \
+    --itemic_layer_n <span class="num">3</span> \
+    --vocab_size_per_layer <span class="num">8192</span></pre>
+  <span class="file-ref">pretrain/tools/model_converter/expand_qwen3_vocab.py</span>
+
+  <p>脚本调用 <code>tokenizer.add_tokens(new_tokens)</code> + <code>model.resize_token_embeddings(target_vocab_size)</code>。新嵌入行随机初始化。<code>itemic_id_range</code>（如 [151669, 176246]）用于在训练中追踪哪些 token 是 itemic token。</p>
+
+  <div class="note warn">
+    <strong>Token 顺序必须严格固定：</strong>所有 <code>s_a_*</code> → <code>s_b_*</code> → <code>s_c_*</code> → 特殊标记，确保语义一致性。
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="openonerec-arch">
+  <h2>6. OpenOneRec: 整体架构与训练管线</h2>
+
+  <p>基于 Qwen3 Decoder-Only 架构（1.7B / 8B），词表扩展到包含 Itemic Token。完整的训练流程如下：</p>
+
+  <div class="flow" style="flex-direction:column; gap:6px;">
+    <div class="arch-row">
+      <div class="arch-box green small">词表扩展</div>
+      <span class="flow-arrow">→</span>
+      <div class="arch-box orange small">Stage 1: Itemic-Text 对齐</div>
+      <span class="flow-arrow">→</span>
+      <div class="arch-box small">转换 HF</div>
+      <span class="flow-arrow">→</span>
+      <div class="arch-box purple small">Stage 2: Co-Pretrain</div>
+      <span class="flow-arrow">→</span>
+      <div class="arch-box small">转换 HF</div>
+    </div>
+    <div class="arch-row">
+      <span class="flow-arrow" style="transform:rotate(90deg)">↓</span>
+    </div>
+    <div class="arch-row">
+      <div class="arch-box blue small">SFT</div>
+      <span class="flow-arrow">→</span>
+      <div class="arch-box pink small">蒸馏 Distillation</div>
+      <span class="flow-arrow">→</span>
+      <div class="arch-box highlight small">RL 强化学习</div>
+      <span class="flow-arrow">→</span>
+      <div class="arch-box green small">RecIF-Bench 评估</div>
+    </div>
+  </div>
+
+  <h3>训练参数</h3>
+  <p>训练主脚本 <code>pretrain/recipes/train_qwen3.py</code> 使用 <strong>FSDP（Fully Sharded Data Parallel）</strong> + MPI 多节点通信。关键参数：</p>
+
+  <table>
+    <tr><th>参数</th><th>说明</th></tr>
+    <tr><td><code>--freeze_llm</code></td><td>冻结 LLM 参数（Stage 1）</td></tr>
+    <tr><td><code>--start_optimize_embedding_index</code></td><td>仅优化从该 ID 开始的 embedding（Stage 1）</td></tr>
+    <tr><td><code>--minibatch_size</code></td><td>LM Head 分块大小，控制显存</td></tr>
+    <tr><td><code>--max_length</code></td><td>每 GPU 每步最大序列长度（packing 后）</td></tr>
+    <tr><td><code>--use_tie_weights</code></td><td>Tied Embedding（≤ 4B 模型必需）</td></tr>
+    <tr><td><code>--resume_from</code></td><td>从 checkpoint 恢复训练</td></tr>
+  </table>
+
+  <h3>Chunked Loss Computation</h3>
+  <p>对于 ~175K 的词表，LM Head 投影矩阵极大。OpenOneRec 使用 <strong>ChunkedLossComputer</strong> 将序列切块，逐块计算 logits + 损失并手动累积梯度：</p>
+
+  <pre><span class="kw">class</span> <span class="cls">ChunkedLossComputer</span>:
+    <span class="kw">def</span> <span class="fn">forward_and_backward</span>(self, input, labels):
+        <span class="kw">for</span> i <span class="kw">in</span> <span class="fn">range</span>(<span class="num">0</span>, seq_len, self.minibatch_size):
+            input_chunk = input[:, start:end].detach().requires_grad_()
+            logits_chunk = self.lm_head(input_chunk)
+            loss_chunk = self.loss_fn(logits_chunk, labels_chunk)
+            grads = torch.autograd.grad(loss_chunk_sum, tensors_to_grad)
+            <span class="cm"># 累积梯度到 lm_head 参数和输入隐状态</span></pre>
+  <span class="file-ref">pretrain/onerec_llm/losses/ce.py:57</span>
+</section>
+
+<!-- ============================================================ -->
+<section id="data">
+  <h2>7. 数据管线</h2>
+
+  <p>OpenOneRec 支持两种数据格式：<strong>WebDataset（wds 分片）</strong>和 <strong>Parquet</strong>。每条样本包含 <code>messages</code>（聊天格式）或 <code>segments</code>（预分词格式）。</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4>Chat 格式损失掩码</h4>
+      <p>仅在 assistant 响应部分计算损失，通过搜索 <code>&lt;|im_start|&gt;assistant\n</code> 和 <code>&lt;|im_end|&gt;\n</code> 模式实现。</p>
+      <span class="file-ref">pretrain/onerec_llm/data/qwen3_dataset.py:99</span>
+    </div>
+    <div class="card">
+      <h4>序列 Packing</h4>
+      <p>多个样本拼接到 <code>max_length</code>（如 30000），<code>cu_seqlens</code> 记录边界供 flash attention 使用。padding 对齐到 <code>(max_length + 7) // 8 * 8 + 64</code>。</p>
+      <span class="file-ref">pretrain/onerec_llm/data/qwen3_dataset.py:219</span>
+    </div>
+    <div class="card">
+      <h4>Thinking Pattern</h4>
+      <p>当 <code>add_think_pattern=true</code> 时，自动为消息添加 <code>/think</code> / <code>/no_think</code> 后缀，模型输出 <code>&lt;think&gt;...&lt;/think&gt;</code> 推理过程。</p>
+    </div>
+  </div>
+
+  <h3>张量维度追踪</h3>
+  <table class="dim-table">
+    <tr><th>步骤</th><th>形状</th><th>说明</th></tr>
+    <tr><td>输入 tokens</td><td>[1, S_total]</td><td>Packed 序列，S_total ≈ 30K</td></tr>
+    <tr><td>Embedding</td><td>[1, S_total, d]</td><td>d = 2048 (1.7B) / 4096 (8B)</td></tr>
+    <tr><td>Transformer</td><td>[1, S_total, d]</td><td>24 / 32 层, RoPE + GQA + SwiGLU</td></tr>
+    <tr><td>LM Head（分块）</td><td>[1, chunk, V]</td><td>V ≈ 175K, chunk = 512</td></tr>
+    <tr><td>Loss</td><td>scalar</td><td>仅在 assistant token 上计算 CE</td></tr>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<section id="stage1">
+  <h2>8. Stage 1: Itemic-Text 对齐训练</h2>
+
+  <p><span class="tag blue">冻结 LLM</span> <span class="tag orange">仅训练 Embedding</span></p>
+
+  <p>LLM 骨干被<strong>冻结</strong>，仅训练新增的 itemic token 嵌入（token ID ≥ 151669）。使 itemic 嵌入与现有的 LLM 嵌入空间对齐。</p>
+
+  <div class="card">
+    <h4>启动命令</h4>
+    <pre>bash examples/pretrain_stg1.sh \
+    --dataset_config examples/dataset_config/stg1.json \
+    --freeze_llm \
+    --start_optimize_embedding_index <span class="num">151669</span> \
+    --model_dir /path/to/Qwen3_itemic \
+    --use_tie_weights</pre>
+    <span class="file-ref">pretrain/examples/pretrain_stg1.sh</span>
+  </div>
+
+  <div class="card">
+    <h4>Embedding Gradient Masker 实现</h4>
+    <pre><span class="kw">class</span> <span class="cls">EmbeddingGradientMasker</span>:
+    <span class="kw">def</span> <span class="fn">__call__</span>(self, model, opt, *_):
+        emb = model.get_input_embeddings()
+        <span class="kw">if</span> emb.weight.grad <span class="kw">is</span> <span class="kw">not</span> <span class="kw">None</span>:
+            emb.weight.grad[:self.start_optimize_index] = <span class="num">0</span>
+            <span class="cm"># 仅 itemic token (ID ≥ 151669) 的梯度保留</span></pre>
+    <span class="file-ref">pretrain/onerec_llm/training/gradients.py</span>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="stage2">
+  <h2>9. Stage 2: 全参数 Co-Pretraining</h2>
+
+  <p><span class="tag purple">全参数解冻</span> <span class="tag green">推荐 + 通用文本混合</span></p>
+
+  <p>所有参数解冻，在推荐数据与通用文本数据的混合语料上进行联合预训练。这一阶段整合协同信号与通用语言理解。</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4>超参数</h4>
+      <table>
+        <tr><td>learning_rate</td><td>1e-5</td></tr>
+        <tr><td>lr_scheduler</td><td>cosine + warmup</td></tr>
+        <tr><td>max_length</td><td>30000（packed）</td></tr>
+        <tr><td>minibatch_size</td><td>512（Chunked LM Head）</td></tr>
+        <tr><td>optimizer</td><td>AdamW</td></tr>
+        <tr><td>use_tie_weights</td><td>True（≤ 4B）</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h4>数据域</h4>
+      <table>
+        <tr><th>域</th><th>来源</th></tr>
+        <tr><td>短视频</td><td>快手（推荐数据）</td></tr>
+        <tr><td>广告</td><td>快手（推荐数据）</td></tr>
+        <tr><td>商品</td><td>快手（推荐数据）</td></tr>
+        <tr><td>通用文本</td><td>公开语料</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h3>梯度操作与 Checkpoint</h3>
+  <div class="card-grid">
+    <div class="card">
+      <pre><span class="cm"># 值裁剪</span>
+clip_grad_by_value(model, clip_value=<span class="num">1.0</span>)
+<span class="cm"># 范数裁剪（FSDP 感知）</span>
+clip_grad_norm(model, max_norm=<span class="num">1.0</span>)
+<span class="cm"># 激活值 Checkpointing</span>
+set_activation_checkpointing(model)</pre>
+      <span class="file-ref">pretrain/onerec_llm/training/gradients.py</span>
+    </div>
+    <div class="card">
+      <h4>Checkpoint 目录结构</h4>
+      <pre>output_dir/
+├── step50/global_step50/
+│   ├── model/       <span class="cm"># 模型权重</span>
+│   ├── optimizer/   <span class="cm"># 优化器状态</span>
+│   └── ...
+├── step100/global_step100/ ...</pre>
+      <p>训练后需用 <code>scripts/convert_checkpoint_to_hf.sh</code> 转换为 HuggingFace 格式。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="sft">
+  <h2>10. Post-Training: SFT + 蒸馏 + RL</h2>
+
+  <h3>Stage 1: 多任务 SFT</h3>
+  <p><span class="tag blue">监督微调</span> 在所有 8 个 RecIF-Bench 任务上对模型进行指令微调。支持 <code>add_think_pattern</code> 开启推理模式。</p>
+
+  <div class="card">
+    <pre>bash examples/posttrain_sft.sh \
+    --dataset_config examples/dataset_config/sft.json \
+    --model_dir /path/to/stage2/converted \
+    --learning_rate 1e-5</pre>
+    <span class="file-ref">pretrain/examples/posttrain_sft.sh</span>
+  </div>
+
+  <p>SFT 数据格式示例：</p>
+  <pre>{
+    <span class="str">"messages"</span>: [
+        {<span class="str">"role"</span>: <span class="str">"user"</span>,
+         <span class="str">"content"</span>: <span class="str">"用户历史: &lt;|sid_begin|&gt;&lt;s_a_12&gt;&lt;s_b_340&gt;&lt;s_c_101&gt;&lt;|sid_end|&gt;..."</span>},
+        {<span class="str">"role"</span>: <span class="str">"assistant"</span>,
+         <span class="str">"content"</span>: <span class="str">"推荐视频: &lt;|sid_begin|&gt;&lt;s_a_88&gt;&lt;s_b_721&gt;&lt;s_c_443&gt;&lt;|sid_end|&gt;"</span>}
+    ]
+}</pre>
+
+  <h3>Stage 2: On-Policy 蒸馏</h3>
+  <p><span class="tag purple">知识蒸馏</span> 通过 VeRL 框架，学生模型（OneRec-SFT）生成 rollout，教师模型（更大的 Qwen3 基座）提供 log-probability，最小化 KL 散度，恢复 SFT 中可能丢失的通用推理能力。</p>
+  <span class="file-ref">verl_distillation/</span>
+
+  <h3>Stage 3: 强化学习</h3>
+  <p><span class="tag pink">RL 微调</span> 基于 VeRL 的 GRPO/PPO，推荐 Reward 信号（Recall@K、AUC）而非通用人类偏好，直接优化推荐业务指标。</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4>RL 管线组件</h4>
+      <table>
+        <tr><th>组件</th><th>位置</th></tr>
+        <tr><td>Training Recipes</td><td><span class="file-ref">verl_rl/recipe/</span></td></tr>
+        <tr><td>VLLM Rollout</td><td><span class="file-ref">verl_rl/verl/</span></td></tr>
+        <tr><td>Reward Model</td><td><span class="file-ref">verl_rl/verl/</span></td></tr>
+        <tr><td>Docker 环境</td><td><span class="file-ref">verl_rl/docker/</span></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h4>与 OneRec IPA 的呼应</h4>
+      <p>OpenOneRec 的 RL 阶段继承了 OneRec 论文中的偏好对齐思想，但在开源框架中使用标准化的 GRPO 流程替代了定制的 IPA + Reward Model 方案。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="eval">
+  <h2>11. 评估: RecIF-Bench &amp; 跨域迁移</h2>
+
+  <p><strong>RecIF-Bench</strong> 是首个全面的推荐指令跟随评测基准，涵盖 1 亿交互、20 万用户、3 个领域（短视频/广告/商品），组织为 8 个任务、4 层能力体系：</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <h4>L0: 语义对齐</h4>
+      <table>
+        <tr><th>任务</th><th>指标</th><th>8B-Pro</th></tr>
+        <tr><td>Item Understanding</td><td>LLM Score</td><td>0.3209</td></tr>
+      </table>
+      <p>物品 SID → 文本描述生成</p>
+    </div>
+    <div class="card">
+      <h4>L1: 基础预测</h4>
+      <table>
+        <tr><th>任务</th><th>指标</th><th>8B-Pro</th></tr>
+        <tr><td>Short Video Rec</td><td>Recall@32</td><td>0.0369</td></tr>
+        <tr><td>Ad Rec</td><td>Recall@32</td><td>0.0964</td></tr>
+        <tr><td>Product Rec</td><td>Recall@32</td><td>0.0538</td></tr>
+        <tr><td>Label Prediction</td><td>AUC</td><td>0.6912</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h4>L2: 指令跟随</h4>
+      <table>
+        <tr><th>任务</th><th>指标</th><th>8B-Pro</th></tr>
+        <tr><td>Interactive Rec</td><td>Recall@32</td><td>0.3458</td></tr>
+        <tr><td>Label-Cond. Rec</td><td>Recall@32</td><td>0.0235</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h4>L3: 推理能力</h4>
+      <table>
+        <tr><th>任务</th><th>指标</th><th>8B-Pro</th></tr>
+        <tr><td>Rec. Explanation</td><td>LLM Score</td><td>4.0381</td></tr>
+      </table>
+      <p>推荐理由推理推断</p>
+    </div>
+  </div>
+
+  <h3>Amazon 跨域迁移（Recall@10）</h3>
+  <p>OneRec-Foundation 在 Amazon 10 个数据集上平均超越最强基线（LC-Rec）<strong>26.8%</strong>，展现强大的零样本/少样本迁移能力。</p>
+
+  <table>
+    <tr><th>Domain</th><th>SASRec</th><th>TIGER</th><th>LC-Rec</th><th>OneRec</th></tr>
+    <tr><td>Baby</td><td>0.0381</td><td>0.0318</td><td>0.0344</td><td><strong>0.0513</strong></td></tr>
+    <tr><td>Beauty</td><td>0.0639</td><td>0.0628</td><td>0.0764</td><td><strong>0.0924</strong></td></tr>
+    <tr><td>Cell Phones</td><td>0.0782</td><td>0.0786</td><td>0.0883</td><td><strong>0.1036</strong></td></tr>
+    <tr><td>Grocery</td><td>0.0789</td><td>0.0691</td><td>0.0790</td><td><strong>0.1029</strong></td></tr>
+    <tr><td>Health</td><td>0.0506</td><td>0.0534</td><td>0.0616</td><td><strong>0.0768</strong></td></tr>
+    <tr><td>Home</td><td>0.0212</td><td>0.0216</td><td>0.0293</td><td><strong>0.0390</strong></td></tr>
+    <tr><td>Pet Supplies</td><td>0.0607</td><td>0.0542</td><td>0.0612</td><td><strong>0.0834</strong></td></tr>
+    <tr><td>Sports</td><td>0.0389</td><td>0.0331</td><td>0.0418</td><td><strong>0.0547</strong></td></tr>
+    <tr><td>Tools</td><td>0.0437</td><td>0.0344</td><td>0.0438</td><td><strong>0.0593</strong></td></tr>
+    <tr><td>Toys</td><td>0.0658</td><td>0.0527</td><td>0.0549</td><td><strong>0.0953</strong></td></tr>
+  </table>
+
+  <h3>评估流水线</h3>
+  <p><span class="file-ref">benchmarks/eval_script.sh</span> 执行以下流程：</p>
+  <ol>
+    <li>加载模型（HuggingFace 格式）</li>
+    <li>对每个任务生成预测</li>
+    <li>计算指标：Recall@K（检索）、AUC（预测）、LLM Score（生成）</li>
+    <li>VLLM + Ray 支持多节点推理</li>
+  </ol>
+
+  <div class="note warn">
+    <strong>评测配置：</strong>Item Understanding 和 Recommendation Explanation 任务需要 Gemini API 作为 LLM-as-Judge，在 <span class="file-ref">benchmarks/api/config/llm_config.json</span> 中配置。
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="code">
+  <h2>12. 代码地图</h2>
+
+  <table>
+    <tr><th>模块</th><th>关键文件</th><th>功能</th></tr>
+    <tr>
+      <td><code>pretrain/</code></td>
+      <td>
+        <span class="file-ref">recipes/train_qwen3.py</span><br>
+        <span class="file-ref">onerec_llm/losses/ce.py</span><br>
+        <span class="file-ref">onerec_llm/data/qwen3_dataset.py</span><br>
+        <span class="file-ref">onerec_llm/training/gradients.py</span><br>
+        <span class="file-ref">tools/model_converter/expand_qwen3_vocab.py</span>
+      </td>
+      <td>核心预训练管线：FSDP 训练循环、分块 CE 损失、数据加载与 Packing、梯度掩码、词表扩展</td>
+    </tr>
+    <tr>
+      <td><code>tokenizer/</code></td>
+      <td>
+        <span class="file-ref">res_kmeans.py</span><br>
+        <span class="file-ref">train_res_kmeans.py</span><br>
+        <span class="file-ref">infer_res_kmeans.py</span>
+      </td>
+      <td>残差 K-Means 用于物品嵌入量化；将原始嵌入编码为离散 token 序列</td>
+    </tr>
+    <tr>
+      <td><code>benchmarks/</code></td>
+      <td>
+        <span class="file-ref">eval_script.sh</span><br>
+        <span class="file-ref">benchmark/</span><br>
+        <span class="file-ref">api/</span>
+      </td>
+      <td>RecIF-Bench 评估：8 任务、LLM-as-Judge、VLLM 推理</td>
+    </tr>
+    <tr>
+      <td><code>verl_rl/</code></td>
+      <td>
+        <span class="file-ref">verl/</span><br>
+        <span class="file-ref">recipe/</span>
+      </td>
+      <td>RL 后训练：VeRL 框架、GRPO、推荐 Reward 信号</td>
+    </tr>
+    <tr>
+      <td><code>verl_distillation/</code></td>
+      <td>—</td>
+      <td>On-Policy 蒸馏：学生-教师 KL 散度最小化</td>
+    </tr>
+  </table>
+
+  <h3>完整脚本清单</h3>
+  <table>
+    <tr><th>步骤</th><th>脚本</th></tr>
+    <tr><td>词表扩展</td><td><code>bash scripts/expand_qwen3_vocab.sh</code></td></tr>
+    <tr><td>Stage 1（对齐）</td><td><code>bash examples/pretrain_stg1.sh</code></td></tr>
+    <tr><td>Stage 2（Co-Pretrain）</td><td><code>bash examples/pretrain_stg2.sh</code></td></tr>
+    <tr><td>Checkpoint → HF 格式</td><td><code>bash scripts/convert_checkpoint_to_hf.sh</code></td></tr>
+    <tr><td>SFT</td><td><code>bash examples/posttrain_sft.sh</code></td></tr>
+    <tr><td>验证 HF 模型</td><td><code>bash scripts/test_hf_model.sh</code></td></tr>
+    <tr><td>Benchmark 评估</td><td><code>bash eval_script.sh &lt;model&gt; &lt;name&gt; &lt;think&gt;</code></td></tr>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<section style="margin-top:60px; padding-top:20px; border-top:1px solid var(--border);">
+  <p style="text-align:center; color:var(--text2); font-size:0.85rem;">
+    基于代码库 <a href="https://github.com/Kuaishou-OneRec/OpenOneRec">github.com/Kuaishou-OneRec/OpenOneRec</a>（commit <code>1f4a99e</code>）和论文
+    <a href="https://arxiv.org/abs/2502.18965">arXiv:2502.18965</a>（OneRec）&amp;
+    <a href="https://arxiv.org/abs/2512.24762">arXiv:2512.24762</a>（OpenOneRec Technical Report）生成。
+  </p>
+</section>
+
+</div>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+      const link = document.querySelector(`nav a[href="#${e.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-50% 0px -50% 0px' });
+document.querySelectorAll('section[id]').forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
